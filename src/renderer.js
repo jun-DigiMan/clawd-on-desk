@@ -64,6 +64,10 @@ function initWithConfig(cfg) {
 
   applyObjectScaleStyle(clawdEl, getObjectSvgName(clawdEl), null);
   applyObjectScaleStyle(pendingNext, getObjectSvgName(pendingNext), null);
+
+  try {
+    container.style.filter = typeof tc.cssFilter === "string" && tc.cssFilter ? tc.cssFilter : "";
+  } catch {}
 }
 
 function applyObjectScaleStyle(el, file, state) {

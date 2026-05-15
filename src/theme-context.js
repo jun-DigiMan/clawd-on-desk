@@ -81,6 +81,7 @@ function createThemeContext(theme, options = {}) {
       rendering: theme.rendering || { svgChannel: "auto" },
       objectScale: theme.objectScale,
       transitions: theme.transitions || {},
+      cssFilter: typeof theme.cssFilter === "string" ? theme.cssFilter : null,
     };
   }
 
