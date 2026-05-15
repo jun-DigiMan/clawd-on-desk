@@ -982,6 +982,10 @@ usageLimitsStore = require("./usage-limits-store")({
   },
 });
 
+require("./codex-usage-watcher").startCodexUsageWatcher({
+  updateUsageLimits: (payload) => usageLimitsStore && usageLimitsStore.update(payload),
+});
+
 // ── Hit-test: SVG bounding box → screen coordinates ──
 function getHitRectScreen(bounds) { return petWindowRuntime.getHitRectScreen(bounds); }
 function getUpdateBubbleAnchorRect(bounds) { return petWindowRuntime.getUpdateBubbleAnchorRect(bounds); }
