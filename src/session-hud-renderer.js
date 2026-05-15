@@ -2,7 +2,7 @@
 
 const HUD_MAX_EXPANDED_ROWS = 3;
 
-let snapshot = { sessions: [], orderedIds: [], hudTotalNonIdle: 0, hudLastTitle: null, hudShowElapsed: true, hudAutoHide: false, hudPinned: false };
+let snapshot = { sessions: [], orderedIds: [], usageLimits: [], hudTotalNonIdle: 0, hudLastTitle: null, hudShowElapsed: true, hudAutoHide: false, hudPinned: false };
 let i18nPayload = { lang: "en", translations: {} };
 
 const unreadSessions = new Set();
@@ -79,6 +79,74 @@ function splitHudLayout(sessions) {
   const expanded = sessions.slice(0, HUD_MAX_EXPANDED_ROWS);
   const folded = sessions.slice(HUD_MAX_EXPANDED_ROWS);
   return { expanded, folded };
+}
+
+function visibleUsageLimits(currentSnapshot) {
+  const entries = Array.isArray(currentSnapshot.usageLimits) ? currentSnapshot.usageLimits : [];
+  return entries
+    .filter((entry) => entry && (entry.fiveHour || entry.sevenDay || entry.contextWindow))
+    .slice(0, 3);
+}
+
+function percentText(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return `${Math.round(Math.max(0, Math.min(100, n)))}%`;
+}
+
+function remainingPercent(win) {
+  if (!win || typeof win !== "object") return null;
+  const remaining = percentText(win.remainingPercentage);
+  if (remaining) return remaining;
+  const used = Number(win.usedPercentage);
+  return Number.isFinite(used) ? percentText(100 - used) : null;
+}
+
+function formatResetTime(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const date = new Date(n * 1000);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function createUsageRow(entry) {
+  const row = document.createElement("div");
+  row.className = `row usage-row usage-${entry.agentId || "unknown"}`;
+
+  const left = document.createElement("div");
+  left.className = "left";
+
+  const dot = document.createElement("span");
+  dot.className = `dot dot-usage-${entry.agentId === "codex" ? "codex" : "claude"}`;
+  left.appendChild(dot);
+
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = entry.label || (entry.agentId === "codex" ? "Codex" : "Claude");
+  left.appendChild(title);
+
+  const right = document.createElement("span");
+  right.className = "right usage-right";
+  const parts = [];
+  const five = remainingPercent(entry.fiveHour);
+  const seven = remainingPercent(entry.sevenDay);
+  const ctx = percentText(entry.contextWindow && entry.contextWindow.usedPercentage);
+  if (five) parts.push(`5h ${five}`);
+  if (seven) parts.push(`7d ${seven}`);
+  if (ctx) parts.push(`ctx ${ctx}`);
+  right.textContent = parts.join("  ");
+
+  const resets = [];
+  const fiveReset = formatResetTime(entry.fiveHour && entry.fiveHour.resetsAt);
+  const sevenReset = formatResetTime(entry.sevenDay && entry.sevenDay.resetsAt);
+  if (fiveReset) resets.push(`5h reset ${fiveReset}`);
+  if (sevenReset) resets.push(`7d reset ${sevenReset}`);
+  row.title = resets.join(" / ");
+
+  row.appendChild(left);
+  row.appendChild(right);
+  return row;
 }
 
 function createRowForSession(session, now) {
@@ -179,13 +247,18 @@ function createPinButton(pinned) {
 
 function render() {
   const sessions = orderedHudSessions(snapshot);
+  const usageLimits = visibleUsageLimits(snapshot);
   updateUnread(sessions);
   hudEl.replaceChildren();
   hudEl.classList.toggle("has-pin", snapshot.hudAutoHide === true);
-  if (!sessions.length) return;
+  if (!sessions.length && !usageLimits.length) return;
 
   const now = Date.now();
   const { expanded, folded } = splitHudLayout(sessions);
+
+  for (const entry of usageLimits) {
+    hudEl.appendChild(createUsageRow(entry));
+  }
 
   for (const session of expanded) {
     hudEl.appendChild(createRowForSession(session, now));

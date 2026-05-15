@@ -16,6 +16,7 @@
     "create-theme": "node scripts/create-theme.js",
     "install:claude-hooks": "node hooks/install.js",
     "uninstall:claude-hooks": "node hooks/uninstall.js",
+    "install:usage-statusline": "node hooks/usage-statusline-install.js",
     "install:gemini-hooks": "node hooks/gemini-install.js",
     "install:cursor-hooks": "node hooks/cursor-install.js",
     "install:kiro-hooks": "node hooks/kiro-install.js",

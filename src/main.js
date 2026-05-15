@@ -172,6 +172,7 @@ let themeRuntime = null;
 let agentRuntime = null;
 let floatingWindowRuntime = null;
 let codexPetMain = null;
+let usageLimitsStore = null;
 const shortcutHandlers = {
   togglePet: () => togglePetVisibility(),
 };
@@ -946,6 +947,7 @@ const _stateCtx = {
   },
   get sessionHudCleanupDetached() { return sessionHudCleanupDetached; },
   getSessionAliases: () => _settingsController.get("sessionAliases"),
+  getUsageLimitsSnapshot: () => usageLimitsStore ? usageLimitsStore.getSnapshot() : [],
   hasAnyEnabledAgent: () => {
     // `get("agents")` returns the live reference (no clone) — we're only
     // reading. Missing agents field falls back to "assume enabled" (the
@@ -968,6 +970,17 @@ const { setState, applyState, updateSession, resolveDisplayState, getSvgOverride
         startWakePoll, stopWakePoll, detectRunningAgentProcesses,
         startStartupRecovery: _startStartupRecovery } = _state;
 const sessions = _state.sessions;
+
+usageLimitsStore = require("./usage-limits-store")({
+  onChange: () => {
+    try {
+      const snapshot = _state.buildSessionSnapshot();
+      broadcastSessionHudSnapshot(snapshot);
+      broadcastDashboardSessionSnapshot(snapshot);
+      repositionFloatingBubbles();
+    } catch {}
+  },
+});
 
 // ── Hit-test: SVG bounding box → screen coordinates ──
 function getHitRectScreen(bounds) { return petWindowRuntime.getHitRectScreen(bounds); }
@@ -1150,6 +1163,7 @@ const _serverCtx = {
   isAgentPermissionsEnabled: (agentId) => _isAgentPermissionsEnabled({ agents: _settingsController.get("agents") }, agentId),
   isCodexPermissionInterceptEnabled: () => _isCodexPermissionInterceptEnabled({ agents: _settingsController.get("agents") }),
   codexSubagentClassifier: agentRuntime.getCodexSubagentClassifier(),
+  updateUsageLimits: (payload) => usageLimitsStore ? usageLimitsStore.update(payload) : { status: "ignored" },
   setState,
   updateSession: agentRuntime.updateSessionFromServer,
   resolvePermissionEntry,

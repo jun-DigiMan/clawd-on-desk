@@ -9,6 +9,7 @@ const { StringDecoder } = require("string_decoder");
 const {
   postPermissionToRunningServer,
   postStateToRunningServer,
+  postUsageLimitsToRunningServer,
   readHostPrefix,
 } = require("./server-config");
 const { createPidResolver, readStdinJson, getPlatformConfig } = require("./shared-process");
@@ -358,6 +359,21 @@ function buildStateBody(payload, resolve) {
   return body;
 }
 
+function buildUsageLimitsBody(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const limits = payload.rate_limits || payload.rateLimits || payload.usage_limits || payload.usageLimits;
+  const contextWindow = payload.context_window || payload.contextWindow;
+  if (!limits && !contextWindow) return null;
+  return {
+    agent_id: "codex",
+    account_label: process.env.CLAWD_CODEX_USAGE_LABEL || process.env.CLAWD_USAGE_LABEL || "Codex",
+    session_id: normalizeCodexSessionId(payload.session_id, payload.transcript_path),
+    model: typeof payload.model === "string" && payload.model ? payload.model : null,
+    rate_limits: limits || undefined,
+    context_window: contextWindow || undefined,
+  };
+}
+
 function requestCodexPermission(body, callback) {
   postPermissionToRunningServer(
     JSON.stringify(body),
@@ -390,7 +406,15 @@ function main() {
 
     const body = buildStateBody(payload || {}, resolve);
     if (!body) process.exit(0);
-    postStateToRunningServer(JSON.stringify(body), { timeoutMs: 100 }, () => process.exit(0));
+    const usageBody = buildUsageLimitsBody(payload || {});
+    const postState = () => {
+      postStateToRunningServer(JSON.stringify(body), { timeoutMs: 100 }, () => process.exit(0));
+    };
+    if (usageBody) {
+      postUsageLimitsToRunningServer(usageBody, { timeoutMs: 80 }, postState);
+      return;
+    }
+    postState();
   });
 }
 
@@ -404,6 +428,7 @@ module.exports = {
   buildCodexPermissionOutput,
   buildPermissionBody,
   buildStateBody,
+  buildUsageLimitsBody,
   buildToolInputFingerprint,
   extractCodexSessionIdFromTranscriptPath,
   isCodexDesktopSession,

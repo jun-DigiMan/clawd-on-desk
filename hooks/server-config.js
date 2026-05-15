@@ -10,6 +10,7 @@ const SERVER_PORT_COUNT = 5;
 const SERVER_PORTS = Array.from({ length: SERVER_PORT_COUNT }, (_, i) => DEFAULT_SERVER_PORT + i);
 const STATE_PATH = "/state";
 const PERMISSION_PATH = "/permission";
+const USAGE_LIMITS_PATH = "/usage-limits";
 const RUNTIME_CONFIG_PATH = path.join(os.homedir(), ".clawd", "runtime.json");
 
 function normalizePort(value) {
@@ -161,13 +162,13 @@ function probePort(port, timeoutMs, callback, options = {}) {
   });
 }
 
-function postStateToPort(port, payload, timeoutMs, callback, options = {}) {
+function postJsonToPort(port, requestPath, payload, timeoutMs, callback, options = {}) {
   const httpRequest = options.httpRequest || http.request;
   const req = httpRequest(
     {
       hostname: "127.0.0.1",
       port,
-      path: STATE_PATH,
+      path: requestPath,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -199,6 +200,14 @@ function postStateToPort(port, payload, timeoutMs, callback, options = {}) {
   req.end(payload);
 }
 
+function postStateToPort(port, payload, timeoutMs, callback, options = {}) {
+  return postJsonToPort(port, STATE_PATH, payload, timeoutMs, callback, options);
+}
+
+function postUsageLimitsToPort(port, payload, timeoutMs, callback, options = {}) {
+  return postJsonToPort(port, USAGE_LIMITS_PATH, payload, timeoutMs, callback, options);
+}
+
 function discoverClawdPort(options, callback) {
   const timeoutMs = options && options.timeoutMs ? options.timeoutMs : 100;
   const ports = getPortCandidates(options && options.preferredPort, options);
@@ -225,11 +234,27 @@ function discoverClawdPort(options, callback) {
 }
 
 function postStateToRunningServer(body, options, callback) {
+  return postJsonToRunningServer(STATE_PATH, body, {
+    ...options,
+    postJsonToPort: options && options.postStateToPort,
+  }, callback);
+}
+
+function postUsageLimitsToRunningServer(body, options, callback) {
+  return postJsonToRunningServer(USAGE_LIMITS_PATH, body, {
+    ...options,
+    postJsonToPort: options && options.postUsageLimitsToPort,
+  }, callback);
+}
+
+function postJsonToRunningServer(requestPath, body, options, callback) {
   const timeoutMs = options && options.timeoutMs ? options.timeoutMs : 100;
   const payload = typeof body === "string" ? body : JSON.stringify(body);
   const { direct, fallback } = splitPortCandidates(options && options.preferredPort, options);
   const probe = options && options.probePort ? options.probePort : probePort;
-  const post = options && options.postStateToPort ? options.postStateToPort : postStateToPort;
+  const post = options && options.postJsonToPort
+    ? options.postJsonToPort
+    : (port, json, ms, cb, opts) => postJsonToPort(port, requestPath, json, ms, cb, opts);
   let directIndex = 0;
   let fallbackIndex = 0;
 
@@ -636,6 +661,7 @@ module.exports = {
   RUNTIME_CONFIG_PATH,
   SERVER_PORTS,
   STATE_PATH,
+  USAGE_LIMITS_PATH,
   buildPermissionUrl,
   clearRuntimeConfig,
   discoverClawdPort,
@@ -643,6 +669,8 @@ module.exports = {
   postPermissionToPort,
   postPermissionToRunningServer,
   postStateToRunningServer,
+  postUsageLimitsToRunningServer,
+  postUsageLimitsToPort,
   probePort,
   readHostPrefix,
   readRuntimePort,

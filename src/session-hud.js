@@ -9,10 +9,12 @@ const isMac = process.platform === "darwin";
 const isWin = process.platform === "win32";
 
 const HUD_BORDER_Y = 2;
-const HUD_WIDTH = 240;
-const HUD_WIDTH_COMPACT = 190;
+const HUD_WIDTH = 292;
+const HUD_WIDTH_COMPACT = 236;
 const HUD_ROW_HEIGHT = 28;
+const HUD_USAGE_ROW_HEIGHT = 24;
 const HUD_MAX_EXPANDED_ROWS = 3;
+const HUD_MAX_USAGE_ROWS = 3;
 const HUD_HEIGHT = HUD_ROW_HEIGHT + HUD_BORDER_Y;
 const HUD_WINDOW_SHELL = Object.freeze({
   top: 2,
@@ -52,6 +54,15 @@ function snapshotHasVisibleSessions(snapshot) {
   return sessions.some(isHudSession);
 }
 
+function isUsageLimitEntry(entry) {
+  return !!entry && typeof entry === "object" && (entry.fiveHour || entry.sevenDay || entry.contextWindow);
+}
+
+function snapshotHasUsageLimits(snapshot) {
+  const entries = Array.isArray(snapshot && snapshot.usageLimits) ? snapshot.usageLimits : [];
+  return entries.some(isUsageLimitEntry);
+}
+
 function evaluateBaseEligible({
   snapshot,
   sessionHudEnabled,
@@ -63,7 +74,7 @@ function evaluateBaseEligible({
   if (sessionHudEnabled === false) return false;
   if (petHidden) return false;
   if (miniMode || miniTransitioning) return false;
-  return snapshotHasVisibleSessions(snapshot);
+  return snapshotHasVisibleSessions(snapshot) || snapshotHasUsageLimits(snapshot);
 }
 
 function pointInExpandedRect(point, rect, pad) {
@@ -140,7 +151,9 @@ function evaluateShouldShow({
 
 function computeHudLayout(snapshot) {
   const sessions = (snapshot && Array.isArray(snapshot.sessions)) ? snapshot.sessions : [];
-  if (sessions.length === 0) return { expanded: [], folded: [], rowCount: 0 };
+  const usageLimits = (snapshot && Array.isArray(snapshot.usageLimits))
+    ? snapshot.usageLimits.filter(isUsageLimitEntry).slice(0, HUD_MAX_USAGE_ROWS)
+    : [];
   const byId = new Map(sessions.map((s) => [s.id, s]));
   const orderedIds = (snapshot && Array.isArray(snapshot.orderedIds))
     ? snapshot.orderedIds
@@ -151,13 +164,16 @@ function computeHudLayout(snapshot) {
   const visible = ordered.concat(missing).filter(isHudSession);
   const expanded = visible.slice(0, HUD_MAX_EXPANDED_ROWS);
   const folded = visible.slice(HUD_MAX_EXPANDED_ROWS);
-  const rowCount = expanded.length + (folded.length > 0 ? 1 : 0);
-  return { expanded, folded, rowCount };
+  const sessionRowCount = expanded.length + (folded.length > 0 ? 1 : 0);
+  const rowCount = sessionRowCount + usageLimits.length;
+  return { expanded, folded, usageLimits, rowCount, sessionRowCount };
 }
 
-function computeHudHeight(rowCount) {
+function computeHudHeight(rowCount, usageRowCount = 0) {
   if (!Number.isFinite(rowCount) || rowCount <= 0) return HUD_ROW_HEIGHT;
-  return rowCount * HUD_ROW_HEIGHT + HUD_BORDER_Y;
+  const usageRows = Number.isFinite(usageRowCount) && usageRowCount > 0 ? usageRowCount : 0;
+  const sessionRows = Math.max(0, rowCount - usageRows);
+  return sessionRows * HUD_ROW_HEIGHT + usageRows * HUD_USAGE_ROW_HEIGHT + HUD_BORDER_Y;
 }
 
 function computeHudReservedOffset(cardHeight) {
@@ -297,7 +313,7 @@ module.exports = function initSessionHud(ctx) {
       ? ctx.getNearestWorkArea(cx, cy)
       : { x: 0, y: 0, width: 1280, height: 800 };
     const layout = computeHudLayout(snapshot);
-    const height = computeHudHeight(layout.rowCount);
+    const height = computeHudHeight(layout.rowCount, layout.usageLimits.length);
     const width = getHudWidth(ctx.sessionHudShowElapsed !== false);
     const computed = computeSessionHudBounds({ hitRect, anchorRect, workArea, width, height });
     return { hitRect, contentBounds: computed && computed.contentBounds };
@@ -476,7 +492,7 @@ module.exports = function initSessionHud(ctx) {
       ? ctx.getNearestWorkArea(cx, cy)
       : { x: 0, y: 0, width: 1280, height: 800 };
     const layout = computeHudLayout(snapshot);
-    const height = computeHudHeight(layout.rowCount);
+    const height = computeHudHeight(layout.rowCount, layout.usageLimits.length);
     const width = getHudWidth(ctx.sessionHudShowElapsed !== false);
     lastHudHeight = height;
     return computeSessionHudBounds({ hitRect, anchorRect, workArea, width, height });
@@ -579,7 +595,9 @@ module.exports.__test = {
     HUD_WIDTH_COMPACT,
     HUD_HEIGHT,
     HUD_ROW_HEIGHT,
+    HUD_USAGE_ROW_HEIGHT,
     HUD_MAX_EXPANDED_ROWS,
+    HUD_MAX_USAGE_ROWS,
     HUD_WINDOW_SHELL,
     HUD_PET_GAP,
     BUBBLE_GAP,

@@ -22,6 +22,9 @@ const {
   handleStatePost,
 } = require("./server-route-state");
 const {
+  handleUsageLimitsPost,
+} = require("./server-route-usage-limits");
+const {
   handlePermissionPost,
   shouldBypassCCBubble,
   shouldBypassCodexBubble,
@@ -195,6 +198,10 @@ function startHttpServer() {
         createRequestHookRecorder,
         shouldDropForDnd,
         codexOfficialTurns,
+      });
+    } else if (req.method === "POST" && req.url === "/usage-limits") {
+      handleUsageLimitsPost(req, res, {
+        updateUsageLimits: ctx.updateUsageLimits,
       });
     } else if (req.method === "POST" && req.url === "/permission") {
       handlePermissionPost(req, res, {

@@ -9,6 +9,7 @@ const {
   buildCodexPermissionOutput,
   buildPermissionBody,
   buildStateBody,
+  buildUsageLimitsBody,
   buildToolInputFingerprint,
   extractCodexSessionIdFromTranscriptPath,
   normalizeCodexSessionId,
@@ -64,6 +65,23 @@ describe("Codex official hook", () => {
       "codex:019d23d4-f1a9-7633-b9c7-758327137228"
     );
     assert.strictEqual(normalizeCodexSessionId("official-session", "/tmp/rollout.jsonl"), "codex:official-session");
+  });
+
+  it("builds usage limit payloads when Codex hook input exposes limits", () => {
+    const body = buildUsageLimitsBody({
+      session_id: "s1",
+      model: "gpt-5.3-codex",
+      rate_limits: {
+        five_hour: { remaining_percentage: 88 },
+        seven_day: { remaining_percentage: 76 },
+      },
+    });
+
+    assert.strictEqual(body.agent_id, "codex");
+    assert.strictEqual(body.account_label, "Codex");
+    assert.strictEqual(body.session_id, "codex:s1");
+    assert.strictEqual(body.model, "gpt-5.3-codex");
+    assert.strictEqual(body.rate_limits.five_hour.remaining_percentage, 88);
   });
 
   it("builds SessionStart state payloads", () => {

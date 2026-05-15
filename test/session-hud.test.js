@@ -72,13 +72,13 @@ describe("session HUD geometry", () => {
 
     assert.strictEqual(result.flippedAbove, true);
     assert.deepStrictEqual(result.contentBounds, {
-      x: 240,
+      x: 360 - Math.round(constants.HUD_WIDTH / 2),
       y: 520 - constants.HUD_HEIGHT - constants.HUD_PET_GAP,
       width: constants.HUD_WIDTH,
       height: constants.HUD_HEIGHT,
     });
     assert.deepStrictEqual(result.bounds, {
-      x: 240 - constants.HUD_WINDOW_SHELL.left,
+      x: 360 - Math.round(constants.HUD_WIDTH / 2) - constants.HUD_WINDOW_SHELL.left,
       y: 520 - constants.HUD_HEIGHT - constants.HUD_PET_GAP - constants.HUD_WINDOW_SHELL.top,
       width: constants.HUD_WIDTH + constants.HUD_WINDOW_SHELL.left + constants.HUD_WINDOW_SHELL.right,
       height: constants.HUD_HEIGHT + constants.HUD_WINDOW_SHELL.top + constants.HUD_WINDOW_SHELL.bottom,
@@ -205,10 +205,30 @@ describe("session HUD layout", () => {
     assert.strictEqual(rowCount, 0);
   });
 
+  it("counts usage limit rows before session rows", () => {
+    const { usageLimits, rowCount, sessionRowCount } = computeHudLayout({
+      usageLimits: [
+        { label: "Claude Team", fiveHour: { usedPercentage: 10 } },
+        { label: "Codex", sevenDay: { remainingPercentage: 80 } },
+      ],
+      sessions: [mkSession("a")],
+      orderedIds: ["a"],
+    });
+    assert.strictEqual(usageLimits.length, 2);
+    assert.strictEqual(sessionRowCount, 1);
+    assert.strictEqual(rowCount, 3);
+  });
+
   it("computeHudHeight multiplies row count by row height", () => {
     assert.strictEqual(
       computeHudHeight(3),
       constants.HUD_ROW_HEIGHT * 3
+        + constants.HUD_BORDER_Y
+    );
+    assert.strictEqual(
+      computeHudHeight(3, 2),
+      constants.HUD_USAGE_ROW_HEIGHT * 2
+        + constants.HUD_ROW_HEIGHT
         + constants.HUD_BORDER_Y
     );
     assert.strictEqual(computeHudHeight(0), constants.HUD_ROW_HEIGHT);
@@ -239,6 +259,10 @@ describe("session HUD auto-hide helpers", () => {
     assert.strictEqual(evaluateBaseEligible({ ...baseFlags, miniMode: true }), false);
     assert.strictEqual(evaluateBaseEligible({ ...baseFlags, miniTransitioning: true }), false);
     assert.strictEqual(evaluateBaseEligible({ ...baseFlags, snapshot: { sessions: [] } }), false);
+    assert.strictEqual(evaluateBaseEligible({
+      ...baseFlags,
+      snapshot: { sessions: [], usageLimits: [{ label: "Claude", fiveHour: { usedPercentage: 12 } }] },
+    }), true);
     assert.strictEqual(evaluateBaseEligible(baseFlags), true);
   });
 

@@ -643,13 +643,17 @@ function getSessionAliases() {
 }
 
 function buildSessionSnapshot() {
-  return buildSessionSnapshotFromSessions(sessions, {
+  const snapshot = buildSessionSnapshotFromSessions(sessions, {
     sessionAliases: getSessionAliases(),
     getAgentIconUrl,
     statePriority: STATE_PRIORITY,
     sessionHudCleanupDetached: ctx.sessionHudCleanupDetached === true,
     isProcessAlive,
   });
+  if (typeof ctx.getUsageLimitsSnapshot === "function") {
+    snapshot.usageLimits = ctx.getUsageLimitsSnapshot();
+  }
+  return snapshot;
 }
 
 function getActiveSessionAliasKeys() {
