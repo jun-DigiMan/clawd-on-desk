@@ -1,9 +1,44 @@
 #!/usr/bin/env node
 "use strict";
 
+const { execSync } = require("child_process");
 const {
   postUsageLimitsToRunningServer,
 } = require("./server-config");
+
+let _subscriptionCache = null;
+let _subscriptionCacheUntil = 0;
+
+function detectSubscriptionType() {
+  if (process.platform !== "darwin") return null;
+  const now = Date.now();
+  if (_subscriptionCache !== null && now < _subscriptionCacheUntil) {
+    return _subscriptionCache || null;
+  }
+  try {
+    const out = execSync(
+      'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
+      { timeout: 500, stdio: ["ignore", "pipe", "ignore"] }
+    ).toString();
+    const data = JSON.parse(out);
+    const sub = data && data.claudeAiOauth && data.claudeAiOauth.subscriptionType;
+    _subscriptionCache = typeof sub === "string" ? sub : "";
+  } catch {
+    _subscriptionCache = "";
+  }
+  _subscriptionCacheUntil = now + 60_000;
+  return _subscriptionCache || null;
+}
+
+function formatSubscriptionLabel(subscriptionType) {
+  if (typeof subscriptionType !== "string" || !subscriptionType) return null;
+  const lower = subscriptionType.toLowerCase();
+  if (lower === "team") return "Team";
+  if (lower === "pro") return "Pro";
+  if (lower === "max") return "Max";
+  if (lower === "free") return "Free";
+  return subscriptionType.charAt(0).toUpperCase() + subscriptionType.slice(1);
+}
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -16,6 +51,7 @@ function readStdin() {
 }
 
 function pct(value) {
+  if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
 }
@@ -28,22 +64,28 @@ function remainingFromWindow(win) {
   return used === null ? null : 100 - used;
 }
 
-function labelFromPayload(payload) {
+function labelFromPayload(payload, options = {}) {
   const envLabel = process.env.CLAWD_USAGE_LABEL || process.env.CLAWD_USAGE_ACCOUNT;
   if (typeof envLabel === "string" && envLabel.trim()) return envLabel.trim();
+  const subscription = formatSubscriptionLabel(
+    Object.prototype.hasOwnProperty.call(options, "subscriptionType")
+      ? options.subscriptionType
+      : detectSubscriptionType()
+  );
+  if (subscription) return `Claude ${subscription}`;
   const sessionName = payload && (payload.session_name || payload.sessionName);
   if (typeof sessionName === "string" && sessionName.trim()) return sessionName.trim();
   return "Claude";
 }
 
-function buildUsagePayload(input) {
+function buildUsagePayload(input, options = {}) {
   const payload = input && typeof input === "object" ? input : {};
   const limits = payload.rate_limits || payload.rateLimits || null;
   const contextWindow = payload.context_window || payload.contextWindow || null;
   if (!limits && !contextWindow) return null;
   return {
     agent_id: "claude-code",
-    account_label: labelFromPayload(payload),
+    account_label: labelFromPayload(payload, options),
     session_id: payload.session_id || payload.sessionId || null,
     session_name: payload.session_name || payload.sessionName || null,
     model: payload.model && (payload.model.display_name || payload.model.id) || null,
@@ -90,6 +132,8 @@ if (require.main === module) {
 
 module.exports = {
   buildUsagePayload,
+  labelFromPayload,
+  formatSubscriptionLabel,
   formatStatusLine,
   remainingFromWindow,
 };

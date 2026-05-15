@@ -5,6 +5,7 @@ const {
   buildUsagePayload,
   formatStatusLine,
   remainingFromWindow,
+  formatSubscriptionLabel,
 } = require("../hooks/usage-statusline");
 
 describe("usage statusLine hook", () => {
@@ -17,12 +18,26 @@ describe("usage statusLine hook", () => {
         five_hour: { used_percentage: 10 },
         seven_day: { used_percentage: 20 },
       },
-    });
+    }, { subscriptionType: null });
 
     assert.strictEqual(payload.agent_id, "claude-code");
     assert.strictEqual(payload.account_label, "Claude Personal");
     assert.strictEqual(payload.model, "Sonnet");
     assert.strictEqual(payload.rate_limits.five_hour.used_percentage, 10);
+  });
+
+  it("labels payloads by detected subscription type", () => {
+    const team = buildUsagePayload({
+      rate_limits: { five_hour: { used_percentage: 10 } },
+    }, { subscriptionType: "team" });
+    const pro = buildUsagePayload({
+      rate_limits: { five_hour: { used_percentage: 10 } },
+    }, { subscriptionType: "pro" });
+    assert.strictEqual(team.account_label, "Claude Team");
+    assert.strictEqual(pro.account_label, "Claude Pro");
+    assert.strictEqual(formatSubscriptionLabel("max"), "Max");
+    assert.strictEqual(formatSubscriptionLabel(""), null);
+    assert.strictEqual(formatSubscriptionLabel(null), null);
   });
 
   it("formats remaining percentages for terminal display", () => {
@@ -35,5 +50,11 @@ describe("usage statusLine hook", () => {
       },
       context_window: { used_percentage: 12 },
     }), /5h 75% left  7d 91% left  ctx 12%/);
+  });
+
+  it("returns null for missing window values without coercing null to 0", () => {
+    assert.strictEqual(remainingFromWindow({}), null);
+    assert.strictEqual(remainingFromWindow({ used_percentage: null }), null);
+    assert.strictEqual(remainingFromWindow({ remaining_percentage: null, used_percentage: 30 }), 70);
   });
 });

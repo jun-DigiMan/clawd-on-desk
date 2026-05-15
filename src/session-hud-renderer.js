@@ -89,6 +89,7 @@ function visibleUsageLimits(currentSnapshot) {
 }
 
 function percentText(value) {
+  if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   return `${Math.round(Math.max(0, Math.min(100, n)))}%`;
@@ -98,6 +99,7 @@ function remainingPercent(win) {
   if (!win || typeof win !== "object") return null;
   const remaining = percentText(win.remainingPercentage);
   if (remaining) return remaining;
+  if (win.usedPercentage === null || win.usedPercentage === undefined) return null;
   const used = Number(win.usedPercentage);
   return Number.isFinite(used) ? percentText(100 - used) : null;
 }
